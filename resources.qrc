@@ -1,5 +1,0 @@
-<RCC>
-    <qresource prefix="/plugins/SparqlForQGIS" >
-        <file>icon.png</file>
-    </qresource>
-</RCC>
