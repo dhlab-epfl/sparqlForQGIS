@@ -25,12 +25,93 @@ import os
 
 from PyQt4 import QtGui, uic
 
-FORM_CLASS, _ = uic.loadUiType(os.path.join(
-    os.path.dirname(__file__), 'sparql_for_qgis_dialog_base.ui'))
+from SparqlLayer import SparqlLayer
 
 
-class SparqlForQGISDialog(QtGui.QDialog, FORM_CLASS):
-    def __init__(self, parent=None):
-        super(SparqlForQGISDialog, self).__init__(parent)
 
-        self.setupUi(self)
+class SparqlForQGISDialog(QtGui.QDialog):
+    count = 0
+
+    defaultDisplaySparql = '''PREFIX geo: <http://www.opengis.net/ont/geosparql#> 
+SELECT  ?subject
+        ?geom
+        ?class
+WHERE   {
+            ?subject geo:geometry ?geom .
+            ?subject a ?class .
+        }'''
+
+    defaultUpdateSparql = '''PREFIX geo: <http://www.opengis.net/ont/geosparql#> 
+WITH <http://dhlab.epfl.ch/vtm/>
+DELETE  {
+            ?subject geo:geometry ?geom
+        }
+INSERT  {
+            ?subject geo:geometry !newgeom
+        }
+WHERE   {
+            ?subject geo:geometry ?geom
+            FILTER (
+                ?subject=!subject
+            )
+        }'''    
+
+    def __init__(self, main):
+        super(SparqlForQGISDialog, self).__init__()
+
+        self.main = main
+
+        uic.loadUi(os.path.join( os.path.dirname(__file__), 'sparql_for_qgis_dialog_base.ui'), self)
+
+
+        self.createButton.pressed.connect( self.createLayer )
+        self.deleteButton.pressed.connect( self.deleteLayer )
+
+        self.updateButton.pressed.connect( self.updateLayer )
+        self.listWidget.currentRowChanged.connect( self.rowSelected )
+
+        self.refreshList()
+
+    def refreshList(self):
+
+        self.listWidget.clear()
+
+        for layer in self.main.layers:
+            self.listWidget.addItem( layer.name + ('*' if layer.needsUpdate else '') )
+
+    def createLayer(self):
+        SparqlForQGISDialog.count += 1
+        self.main.layers.append( SparqlLayer( self.main, 'Sparql Layer '+str(SparqlForQGISDialog.count), 'http://dhlabpc3.epfl.ch:8890/sparql/', self.defaultDisplaySparql, self.defaultUpdateSparql ) )
+
+        self.refreshList()
+        self.listWidget.setCurrentRow( self.listWidget.count() - 1 )
+
+    def deleteLayer(self):
+        row = self.listWidget.currentRow()
+        layer = self.main.layers[ row ]
+        layer.unload()
+
+        self.refreshList()
+
+    def rowSelected(self, row):
+        layer = self.main.layers[row]
+
+        self.nameLineEdit.setText( layer.name )
+        self.urlLineEdit.setText( layer.url )
+        self.displaySparqlPlainTextEdit.setPlainText( layer.displaySparql )
+        self.updateSparqlPlainTextEdit.setPlainText( layer.updateSparql )
+
+    def updateLayer(self):
+        row = self.listWidget.currentRow()
+        layer = self.main.layers[ row ]
+
+        layer.name = self.nameLineEdit.text()
+        layer.url = self.urlLineEdit.text()
+        layer.displaySparql = self.displaySparqlPlainTextEdit.toPlainText()
+        layer.updateSparql = self.updateSparqlPlainTextEdit.toPlainText()
+        layer.needsUpdate = True
+
+        self.refreshList()
+
+
+
